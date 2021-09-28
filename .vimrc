@@ -7,9 +7,6 @@ set encoding=utf-8
 " Copy/paste to OSX
 set clipboard=unnamed
 
-" Set directory for ripgrep search
-cd $NOTES
-
 set listchars=tab:\|\ 
 
 " Enable ripgrep
