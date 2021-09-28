@@ -22,4 +22,3 @@ function clam() { freshclam; sudo clamscan -r --copy=$HOME/infected --log=$HOME/
 
 # Prevent history being lost from multiple concurrent sessions
 setopt APPEND_HISTORY
-
