@@ -41,7 +41,8 @@ alias gg='git log --oneline --abbrev-commit --all --graph --decorate --color'
 alias ggl='git log --oneline --abbrev-commit --all --graph --decorate --color --stat'
 #alias gr='git rebase -i'  # e.g. gr HEAD~10
 alias gs='git status'
-alias gp='git pull --rebase'
+alias gph='git push'
+alias gpl='git pull --rebase'
 
 function gr() { git rebase -i HEAD~$1; }
 
