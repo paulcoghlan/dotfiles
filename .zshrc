@@ -14,10 +14,10 @@ then
    [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  
 fi
 
-if [ -d "$HOME/.nix-profile" ]
-then
-   eval "$(direnv hook zsh)"
-fi
+#if [ -d "$HOME/.nix-profile" ]
+#then
+#   eval "$(direnv hook zsh)"
+#fi
 
 autoload -U edit-command-line
 # Emacs style
@@ -25,3 +25,5 @@ zle -N edit-command-line
 bindkey '^xe' edit-command-line
 bindkey '^x^e' edit-command-line
 export PATH="/opt/homebrew/opt/mysql-client/bin:$PATH"
+
+source <(stern --completion=zsh)
