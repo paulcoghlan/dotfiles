@@ -5,6 +5,8 @@ export NOTES=$HOME/notes
 export GOPATH=$HOME/go/
 export PATH=$GOPATH/bin:$PATH
 
+export USE_GKE_GCLOUD_AUTH_PLUGIN=True
+
 alias config='/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME'
 
 alias gd='git diff'
@@ -14,6 +16,10 @@ alias ggl='git log --oneline --abbrev-commit --all --graph --decorate --color --
 alias gs='git status'
 alias gph='git push'
 alias gpl='git pull --rebase'
+alias gc='git commit -m'
+alias ga='git add'
+
+alias k=kubectl
 
 function gr() { git rebase -i HEAD~$1; }
 

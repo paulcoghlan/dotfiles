@@ -27,3 +27,5 @@ bindkey '^x^e' edit-command-line
 export PATH="/opt/homebrew/opt/mysql-client/bin:$PATH"
 
 source <(stern --completion=zsh)
+[[ $commands[kubectl] ]] && source <(kubectl completion zsh) # add autocomplete permanently to your zsh shell
+export SSH_AUTH_SOCK=~/.ssh/agent
