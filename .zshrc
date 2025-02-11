@@ -26,6 +26,18 @@ bindkey '^xe' edit-command-line
 bindkey '^x^e' edit-command-line
 export PATH="/opt/homebrew/opt/mysql-client/bin:$PATH"
 
+export PATH="$HOME/Library/Application Support/cloud-code/installer/google-cloud-sdk/bin:$PATH"
+
 source <(stern --completion=zsh)
 [[ $commands[kubectl] ]] && source <(kubectl completion zsh) # add autocomplete permanently to your zsh shell
+
+eval $(/opt/homebrew/bin/ssh-agent -s)
 export SSH_AUTH_SOCK=~/.ssh/agent
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+# The next line updates PATH for the Google Cloud SDK.
+if [ -f '/Users/paul/Downloads/google-cloud-sdk/path.zsh.inc' ]; then . '/Users/paul/Downloads/google-cloud-sdk/path.zsh.inc'; fi
+
+# The next line enables shell command completion for gcloud.
+if [ -f '/Users/paul/Downloads/google-cloud-sdk/completion.zsh.inc' ]; then . '/Users/paul/Downloads/google-cloud-sdk/completion.zsh.inc'; fi

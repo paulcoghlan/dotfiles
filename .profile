@@ -50,6 +50,6 @@ function docker-rm() { docker rm -f $(docker ps -q -a); }
 function clam() { freshclam; sudo clamscan -r --copy=$HOME/infected --log=$HOME/clamscan.log $1; }
 
 # Enable SSH Agent https://www.funtoo.org/Funtoo:Keychain
-eval `keychain --eval --agents ssh 2018-03-01_id_rsa`
+#eval `keychain --eval --agents ssh 2018-03-01_id_rsa`
 
 . "$HOME/.cargo/env"
