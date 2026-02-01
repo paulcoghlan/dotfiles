@@ -1,7 +1,7 @@
 eval $(/opt/homebrew/bin/brew shellenv)
 
 export NOTES=$HOME/notes
-export GOPATH=$HOME/go/
+export GOPATH=$HOME/go
 export PATH=.:$GOPATH/bin:$PATH
 export PNPM_HOME=$HOME/Library/pnpm
 case ":$PATH:" in

@@ -105,5 +105,37 @@ source $ZSH/oh-my-zsh.sh
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 
+# FZF shell integration
+source <(fzf --zsh)
+
+# List recent git branches and jump to them
+gcr () {
+        command git checkout $(git for-each-ref refs/heads/ --format='%(refname:short)' --sort='-committerdate' | fzf +s)
+}
+
+update_ghostty_k8s_theme() {
+  # Get the current context
+  local context=$(kubectl config current-context 2>/dev/null)
+  
+  case "$context" in
+    prod-*)
+      # Vibrant "Warning" Red
+      printf "\e]11;#5f0000\a"
+      ;;
+    ops-*)
+      # Vibrant "Electric" Blue
+      printf "\e]11;#002b5f\a"
+      ;;
+    *)
+      # Your default background (ensure this is dark)
+      printf "\e]11;#121212\a"
+      ;;
+  esac
+}
+
+# Ensure the hook is registered
+autoload -Uz add-zsh-hook
+add-zsh-hook precmd update_ghostty_k8s_theme
 
 if [ -f '/opt/homebrew/share/google-cloud-sdk/path.zsh.inc' ]; then . '/opt/homebrew/share/google-cloud-sdk/path.zsh.inc'; fi
+export PATH="/opt/homebrew/opt/mysql@8.0/bin:$PATH"
