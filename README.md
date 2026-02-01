@@ -30,6 +30,13 @@ config commit -m "Add vimrc"
 config push 
 ```
 
+## Agent Customisation
+
+```
+mkdir .opencode
+ln -s .claude/commands .opencode/commands
+```
+
 ## Oh My Zsh Customization
 
 This repository includes a custom Oh My Zsh theme that's managed separately from the main Oh My Zsh installation.
