@@ -1,0 +1,97 @@
+# Main branch configuration
+main_branch: main
+
+# Worktree directory
+worktree_dir: "../worktrees"
+
+# Post-creation commands (run before tmux setup)
+post_create:
+  # Create devcontainer if it doesn't exist
+  - |
+    if [ ! -d .devcontainer ]; then
+      echo "Creating Claude Code devcontainer..."
+      mkdir -p .devcontainer
+      
+      # Create devcontainer.json based on Claude Code's config
+      cat > .devcontainer/devcontainer.json << 'DEVCONTAINER_EOF'
+    {
+      "name": "Claude Code Dev Container",
+      "image": "mcr.microsoft.com/devcontainers/typescript-node:1-20-bookworm",
+      
+      "features": {
+        "ghcr.io/devcontainers/features/common-utils:2": {
+          "installZsh": true,
+          "installOhMyZsh": true,
+          "upgradePackages": true,
+          "username": "node",
+          "userUid": "1000",
+          "userGid": "1000"
+        },
+        "ghcr.io/anthropics/devcontainer-features/claude-code:1": {}
+      },
+      
+      "customizations": {
+        "vscode": {
+          "extensions": [
+            "anthropic.claude-code",
+            "dbaeumer.vscode-eslint",
+            "esbenp.prettier-vscode",
+            "eamodio.gitlens"
+          ],
+          "settings": {
+            "editor.formatOnSave": true,
+            "editor.defaultFormatter": "esbenp.prettier-vscode",
+            "editor.codeActionsOnSave": {
+              "source.fixAll.eslint": "explicit"
+            },
+            "terminal.integrated.defaultProfile.linux": "zsh"
+          }
+        }
+      },
+      
+      "remoteUser": "node",
+      
+      "mounts": [
+        "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+        "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
+        "source=${localEnv:HOME}${localEnv:USERPROFILE}/.gitconfig,target=/home/node/.gitconfig,type=bind,consistency=cached"
+      ],
+      
+      "containerEnv": {
+        "NODE_OPTIONS": "--max-old-space-size=4096",
+        "CLAUDE_CONFIG_DIR": "/home/node/.claude"
+      },
+      
+      "postStartCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}",
+      "postCreateCommand": "cat >> ~/.zshrc << 'EOF'\n\n# Git aliases\nalias gc='git commit -m'\nalias gg='git log --oneline --abbrev-commit --all --graph --decorate --color'\n\nEOF\n",
+ 
+      "forwardPorts": [3000, 8080],
+      
+      "runArgs": [
+        "--cap-drop=ALL",
+        "--cap-add=CHOWN",
+        "--cap-add=SETGID",
+        "--cap-add=SETUID",
+        "--security-opt=no-new-privileges"
+      ]
+    }
+    DEVCONTAINER_EOF
+      
+      echo "✅ Devcontainer created at .devcontainer/devcontainer.json"
+    else
+      echo "✅ Devcontainer already exists"
+    fi
+
+# Pane configuration
+panes:
+  - command: zsh
+    focus: true
+  - command: claude
+    split: horizontal
+
+# File operations
+files:
+  symlink:
+    - node_modules  # Share node_modules across worktrees
+  copy:
+    - .env          # Copy environment files
