@@ -1,97 +1,61 @@
-# Main branch configuration
 main_branch: main
+agent: claude
 
-# Worktree directory
-worktree_dir: "../worktrees"
+# Aliases injected into the devcontainer's ~/.zshrc.
+# workmux ignores this key; post_create reads it with yq.
+aliases:
+  - "alias gc='git commit'"
+  - "alias gg='git log --oneline'"
 
-# Post-creation commands (run before tmux setup)
 post_create:
-  # Create devcontainer if it doesn't exist
+  # 1. Check dependencies
+  - |
+    for cmd in devcontainer yq; do
+      if ! command -v "$cmd" &>/dev/null; then
+        echo "Missing dependency: $cmd"
+        [ "$cmd" = "devcontainer" ] && echo "  Install: npm install -g @devcontainers/cli"
+        [ "$cmd" = "yq" ]          && echo "  Install: brew install yq"
+        exit 1
+      fi
+    done
+
+  # 2. Generate aliases file from this config
+  - |
+    yq '.aliases[]' ~/.config/workmux/config.yaml \
+      > ~/.config/workmux/aliases.zsh 2>/dev/null \
+      || echo "# no aliases" > ~/.config/workmux/aliases.zsh
+
+  # 3. Create devcontainer config if not present
   - |
     if [ ! -d .devcontainer ]; then
-      echo "Creating Claude Code devcontainer..."
       mkdir -p .devcontainer
-      
-      # Create devcontainer.json based on Claude Code's config
-      cat > .devcontainer/devcontainer.json << 'DEVCONTAINER_EOF'
+      cat > .devcontainer/devcontainer.json << 'EOF'
     {
-      "name": "Claude Code Dev Container",
+      "name": "Claude Code Dev",
       "image": "mcr.microsoft.com/devcontainers/typescript-node:1-20-bookworm",
-      
       "features": {
-        "ghcr.io/devcontainers/features/common-utils:2": {
-          "installZsh": true,
-          "installOhMyZsh": true,
-          "upgradePackages": true,
-          "username": "node",
-          "userUid": "1000",
-          "userGid": "1000"
-        },
         "ghcr.io/anthropics/devcontainer-features/claude-code:1": {}
       },
-      
-      "customizations": {
-        "vscode": {
-          "extensions": [
-            "anthropic.claude-code",
-            "dbaeumer.vscode-eslint",
-            "esbenp.prettier-vscode",
-            "eamodio.gitlens"
-          ],
-          "settings": {
-            "editor.formatOnSave": true,
-            "editor.defaultFormatter": "esbenp.prettier-vscode",
-            "editor.codeActionsOnSave": {
-              "source.fixAll.eslint": "explicit"
-            },
-            "terminal.integrated.defaultProfile.linux": "zsh"
-          }
-        }
-      },
-      
       "remoteUser": "node",
-      
       "mounts": [
-        "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
-        "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
-        "source=${localEnv:HOME}${localEnv:USERPROFILE}/.gitconfig,target=/home/node/.gitconfig,type=bind,consistency=cached"
+        "source=${localEnv:HOME}/.gitconfig,target=/home/node/.gitconfig,type=bind",
+        "source=${localEnv:HOME}/.config/workmux/aliases.zsh,target=/home/node/.config/workmux/aliases.zsh,type=bind",
+        "source=${localEnv:HOME}/.claude.json,target=/home/node/.claude.json,type=bind"
       ],
-      
-      "containerEnv": {
-        "NODE_OPTIONS": "--max-old-space-size=4096",
-        "CLAUDE_CONFIG_DIR": "/home/node/.claude"
-      },
-      
-      "postStartCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}",
-      "postCreateCommand": "cat >> ~/.zshrc << 'EOF'\n\n# Git aliases\nalias gc='git commit -m'\nalias gg='git log --oneline --abbrev-commit --all --graph --decorate --color'\n\nEOF\n",
- 
-      "forwardPorts": [3000, 8080],
-      
-      "runArgs": [
-        "--cap-drop=ALL",
-        "--cap-add=CHOWN",
-        "--cap-add=SETGID",
-        "--cap-add=SETUID",
-        "--security-opt=no-new-privileges"
-      ]
+      "postCreateCommand": "mkdir -p ~/.config/workmux && echo '[ -f ~/.config/workmux/aliases.zsh ] && source ~/.config/workmux/aliases.zsh' >> ~/.zshrc"
     }
-    DEVCONTAINER_EOF
-      
-      echo "✅ Devcontainer created at .devcontainer/devcontainer.json"
-    else
-      echo "✅ Devcontainer already exists"
+    EOF
     fi
 
-# Pane configuration
-panes:
-  - command: zsh
-    focus: true
-  - command: claude
-    split: horizontal
+  # 4. Start devcontainer
+  - |
+    touch ~/.claude.json
+    devcontainer up --workspace-folder . || {
+      echo "Failed to start devcontainer. Is Docker running?"
+      exit 1
+    }
 
-# File operations
-files:
-  symlink:
-    - node_modules  # Share node_modules across worktrees
-  copy:
-    - .env          # Copy environment files
+panes:
+  - command: devcontainer exec --workspace-folder . claude
+    focus: true
+  - split: horizontal
