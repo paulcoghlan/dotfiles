@@ -40,9 +40,10 @@ post_create:
       "mounts": [
         "source=${localEnv:HOME}/.gitconfig,target=/home/node/.gitconfig,type=bind",
         "source=${localEnv:HOME}/.config/workmux/aliases.zsh,target=/home/node/.config/workmux/aliases.zsh,type=bind",
-        "source=${localEnv:HOME}/.claude.json,target=/home/node/.claude.json,type=bind"
+        "source=${localEnv:HOME}/.claude.json,target=/home/node/.claude.json,type=bind",
+        "source=${localEnv:HOME}/.claude,target=/home/node/.claude,type=bind,consistency=cached"
       ],
-      "postCreateCommand": "mkdir -p ~/.config/workmux && echo '[ -f ~/.config/workmux/aliases.zsh ] && source ~/.config/workmux/aliases.zsh' >> ~/.zshrc"
+      "postCreateCommand": "mkdir -p ~/.config/workmux ~/.local/bin && ln -sf $(which claude) ~/.local/bin/claude && echo '[ -f ~/.config/workmux/aliases.zsh ] && source ~/.config/workmux/aliases.zsh' >> ~/.zshrc"
     }
     EOF
     fi
@@ -50,6 +51,7 @@ post_create:
   # 4. Start devcontainer
   - |
     touch ~/.claude.json
+    mkdir -p ~/.claude
     devcontainer up --workspace-folder . || {
       echo "Failed to start devcontainer. Is Docker running?"
       exit 1
