@@ -33,9 +33,6 @@ post_create:
     {
       "name": "Claude Code Dev",
       "image": "mcr.microsoft.com/devcontainers/typescript-node:1-20-bookworm",
-      "features": {
-        "ghcr.io/anthropics/devcontainer-features/claude-code:1": {}
-      },
       "remoteUser": "node",
       "containerEnv": {
         "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}",
@@ -49,7 +46,7 @@ post_create:
         "source=${localEnv:HOME}/.claude.json,target=/home/node/.claude.json,type=bind",
         "source=${localEnv:HOME}/.claude,target=/home/node/.claude,type=bind,consistency=cached"
       ],
-      "postCreateCommand": "mkdir -p ~/.config/workmux ~/.local/bin && ln -sf $(which claude) ~/.local/bin/claude && echo '[ -f ~/.config/workmux/aliases.zsh ] && source ~/.config/workmux/aliases.zsh' >> ~/.zshrc"
+      "postCreateCommand": "curl -fsSL https://claude.ai/install.sh | bash && mkdir -p ~/.config/workmux && echo '[ -f ~/.config/workmux/aliases.zsh ] && source ~/.config/workmux/aliases.zsh' >> ~/.zshrc"
     }
     EOF
     fi
@@ -65,6 +62,6 @@ post_create:
     }
 
 panes:
-  - command: devcontainer exec --workspace-folder . claude
+  - command: devcontainer exec --workspace-folder . claude --dangerously-skip-permissions
     focus: true
   - split: horizontal
