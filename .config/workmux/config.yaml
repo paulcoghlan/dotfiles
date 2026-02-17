@@ -37,6 +37,12 @@ post_create:
         "ghcr.io/anthropics/devcontainer-features/claude-code:1": {}
       },
       "remoteUser": "node",
+      "containerEnv": {
+        "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}",
+        "ANTHROPIC_MODEL": "${localEnv:ANTHROPIC_MODEL}",
+        "ANTHROPIC_SMALL_FAST_MODEL": "${localEnv:ANTHROPIC_SMALL_FAST_MODEL}",
+        "ANTHROPIC_BASE_URL": "${localEnv:ANTHROPIC_BASE_URL}"
+      },
       "mounts": [
         "source=${localEnv:HOME}/.gitconfig,target=/home/node/.gitconfig,type=bind",
         "source=${localEnv:HOME}/.config/workmux/aliases.zsh,target=/home/node/.config/workmux/aliases.zsh,type=bind",
@@ -52,6 +58,7 @@ post_create:
   - |
     touch ~/.claude.json
     mkdir -p ~/.claude
+    [ -f "$HOME/.dont-commit-env" ] && set -a && . "$HOME/.dont-commit-env" && set +a
     devcontainer up --workspace-folder . || {
       echo "Failed to start devcontainer. Is Docker running?"
       exit 1
