@@ -31,10 +31,10 @@ function git_time_since_commit() {
 }
 
 # Main prompt
-PROMPT='${time_color}%*${reset} ${dir_color}%~${reset} $(git_prompt_info)$(git_time_since_commit)${user_color}❯${reset} '
+PROMPT='${time_color}%D{%H:%M:%S}${reset} ${dir_color}%~${reset} $(git_prompt_info)$(git_time_since_commit)${user_color}❯${reset} '
 
 # Git prompt configuration
-ZSH_THEME_GIT_PROMPT_PREFIX="${git_color}on "
+ZSH_THEME_GIT_PROMPT_PREFIX=" ${git_color}⎇ "
 ZSH_THEME_GIT_PROMPT_SUFFIX="${reset} "
 ZSH_THEME_GIT_PROMPT_DIRTY=" %{$fg[red]%}✗"
 ZSH_THEME_GIT_PROMPT_CLEAN=" %{$fg[green]%}✓"
