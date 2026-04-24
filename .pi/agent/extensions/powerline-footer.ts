@@ -111,6 +111,20 @@ function buildContextBar(percent: number, barWidth: number): string {
 // OSC 8 hyperlink helper
 const hyperlink = (url: string, text: string) => `\x1b]8;;${url}\x07${text}\x1b]8;;\x07`;
 
+// Random human-readable session name used when the current branch has no PR.
+const RANDOM_ADJECTIVES = [
+	"brave", "calm", "clever", "cozy", "eager", "fuzzy", "gentle", "happy",
+	"jolly", "keen", "lively", "merry", "nimble", "quiet", "quick", "sleepy",
+	"snappy", "sunny", "swift", "tidy", "witty", "zesty", "bold", "bright",
+];
+const RANDOM_NOUNS = [
+	"otter", "fox", "heron", "badger", "falcon", "lynx", "panda", "raven",
+	"sparrow", "tiger", "walrus", "yak", "comet", "ember", "glacier", "harbor",
+	"meadow", "orchard", "pebble", "river", "thistle", "willow", "canyon", "dune",
+];
+const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+const randomSessionName = () => `${pick(RANDOM_ADJECTIVES)}-${pick(RANDOM_NOUNS)}`;
+
 export default function (pi: ExtensionAPI) {
 	// Track cost at the start of the current turn so we can show the delta.
 	let turnBaselineCost = 0;
@@ -146,12 +160,14 @@ export default function (pi: ExtensionAPI) {
 			const fetchPr = async (branch: string) => {
 				if (prLookupInFlight) return;
 				prLookupInFlight = true;
+				let title: string | null = null;
 				try {
-					const result = await pi.exec("gh", ["pr", "view", branch, "--json", "url,number", "--jq", ".number,.url"], { timeout: 5000 });
+					const result = await pi.exec("gh", ["pr", "view", branch, "--json", "title,url,number"], { timeout: 5000 });
 					if (result.code === 0 && result.stdout.trim()) {
-						const lines = result.stdout.trim().split("\n");
-						prNumber = lines[0] || null;
-						prUrl = lines[1] || null;
+						const data = JSON.parse(result.stdout);
+						prNumber = data.number != null ? String(data.number) : null;
+						prUrl = data.url || null;
+						title = data.title || null;
 					} else {
 						prNumber = null;
 						prUrl = null;
@@ -160,6 +176,8 @@ export default function (pi: ExtensionAPI) {
 					prNumber = null;
 					prUrl = null;
 				}
+				// Always overwrite: PR title if we found one, otherwise a random name.
+				pi.setSessionName(title || randomSessionName());
 				prLookupInFlight = false;
 				tui.requestRender();
 			};
