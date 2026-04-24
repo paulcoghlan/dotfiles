@@ -6,12 +6,15 @@
  */
 
 import type { AssistantMessage } from "@mariozechner/pi-ai";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 
 // Powerline glyphs (need a Nerd Font)
 const SEP = "\uE0B0";       // right-pointing solid arrow
+const SEP_LEFT = "\uE0B2";  // left-pointing solid arrow (for right-aligned segments)
 const BRANCH = "\uE0A0";    // git branch icon
+const PR_ICON = "\uF407";   // pull request icon (nerd font)
+const TOOL_ICON = "\uF0AD"; // wrench icon (nerd font)
 
 // ANSI helpers for 256-color backgrounds and foregrounds
 const ansiFg = (color: number, text: string) => `\x1b[38;5;${color}m${text}\x1b[0m`;
@@ -27,6 +30,9 @@ const COLORS = {
 	ctxBg: 234,     ctxFg: 245,     // darkest gray - context
 	ctxBarFull: 70,                 // green for filled portion
 	ctxBarEmpty: 240,               // dim for empty portion
+	sessionBg: 24,  sessionFg: 117, // blue - session identity
+	toolsBg: 236,   toolsFg: 244,   // neutral - active tools
+	turnBg: 238,    turnFg: 150,    // subtle green - current turn delta
 };
 
 // Thinking level colors and labels
@@ -40,30 +46,54 @@ const THINKING: Record<string, { label: string; fg: number; bg: number }> = {
 	xhigh:   { label: "⬤ xhigh",   fg: 210, bg: 124 },  // red
 };
 
-/**
- * Build a powerline segment string.
- * Each segment is: " content " followed by a separator arrow
- * whose fg matches the current bg and whose bg matches the next segment's bg (or reset).
- */
-function buildSegments(segments: Array<{ text: string; fg: number; bg: number }>, width: number): string {
-	let result = "";
+type Segment = { text: string; fg: number; bg: number; link?: string };
 
+/** Render a run of left-aligned segments joined by right-pointing separators. */
+function renderLeftSegments(segments: Segment[]): string {
+	let result = "";
 	for (let i = 0; i < segments.length; i++) {
 		const seg = segments[i];
 		const nextBg = i < segments.length - 1 ? segments[i + 1].bg : -1;
 
-		// Segment content with padding
-		result += ansiFgBg(seg.fg, seg.bg, ` ${seg.text} `);
+		const content = ansiFgBg(seg.fg, seg.bg, ` ${seg.text} `);
+		result += seg.link ? hyperlink(seg.link, content) : content;
 
-		// Separator: fg = current bg, bg = next bg (or reset)
 		if (nextBg >= 0) {
 			result += ansiFgBg(seg.bg, nextBg, SEP);
 		} else {
 			result += ansiFg(seg.bg, SEP);
 		}
 	}
+	return result;
+}
 
-	return truncateToWidth(result, width);
+/** Render a run of right-aligned segments joined by left-pointing separators. */
+function renderRightSegments(segments: Segment[]): string {
+	let result = "";
+	for (let i = 0; i < segments.length; i++) {
+		const seg = segments[i];
+		const prevBg = i > 0 ? segments[i - 1].bg : -1;
+
+		// Separator: fg = current bg, bg = previous bg (or reset)
+		if (prevBg >= 0) {
+			result += ansiFgBg(seg.bg, prevBg, SEP_LEFT);
+		} else {
+			result += ansiFg(seg.bg, SEP_LEFT);
+		}
+
+		const content = ansiFgBg(seg.fg, seg.bg, ` ${seg.text} `);
+		result += seg.link ? hyperlink(seg.link, content) : content;
+	}
+	return result;
+}
+
+/** Combine left and right segment groups with space padding between them, truncated to width. */
+function buildPowerline(left: Segment[], right: Segment[], width: number): string {
+	const leftStr = renderLeftSegments(left);
+	const rightStr = renderRightSegments(right);
+	const used = visibleWidth(leftStr) + visibleWidth(rightStr);
+	const pad = " ".repeat(Math.max(1, width - used));
+	return truncateToWidth(leftStr + pad + rightStr, width);
 }
 
 function formatTokens(n: number): string {
@@ -78,15 +108,78 @@ function buildContextBar(percent: number, barWidth: number): string {
 	return ansiFg(COLORS.ctxBarFull, "▓".repeat(filled)) + ansiFg(COLORS.ctxBarEmpty, "░".repeat(empty));
 }
 
+// OSC 8 hyperlink helper
+const hyperlink = (url: string, text: string) => `\x1b]8;;${url}\x07${text}\x1b]8;;\x07`;
+
 export default function (pi: ExtensionAPI) {
+	// Track cost at the start of the current turn so we can show the delta.
+	let turnBaselineCost = 0;
+	let hasTurnBaseline = false;
+
+	const snapshotTotalCost = (ctx: ExtensionContext): number => {
+		let cost = 0;
+		for (const e of ctx.sessionManager.getBranch()) {
+			if (e.type === "message" && e.message.role === "assistant") {
+				cost += (e.message as AssistantMessage).usage.cost.total;
+			}
+		}
+		return cost;
+	};
+
+	pi.on("turn_start", async (_event, ctx) => {
+		turnBaselineCost = snapshotTotalCost(ctx);
+		hasTurnBaseline = true;
+	});
+
 	pi.on("session_start", async (_event, ctx) => {
+		// New/resumed session starts a fresh turn-cost window.
+		turnBaselineCost = 0;
+		hasTurnBaseline = false;
+
 		ctx.ui.setFooter((tui, _theme, footerData) => {
-			const unsub = footerData.onBranchChange(() => tui.requestRender());
+			// Track PR URL per branch
+			let prUrl: string | null = null;
+			let prNumber: string | null = null;
+			let lastBranch: string | null = null;
+			let prLookupInFlight = false;
+
+			const fetchPr = async (branch: string) => {
+				if (prLookupInFlight) return;
+				prLookupInFlight = true;
+				try {
+					const result = await pi.exec("gh", ["pr", "view", branch, "--json", "url,number", "--jq", ".number,.url"], { timeout: 5000 });
+					if (result.code === 0 && result.stdout.trim()) {
+						const lines = result.stdout.trim().split("\n");
+						prNumber = lines[0] || null;
+						prUrl = lines[1] || null;
+					} else {
+						prNumber = null;
+						prUrl = null;
+					}
+				} catch {
+					prNumber = null;
+					prUrl = null;
+				}
+				prLookupInFlight = false;
+				tui.requestRender();
+			};
+
+			const unsub = footerData.onBranchChange(() => {
+				const branch = footerData.getGitBranch();
+				if (branch && branch !== lastBranch) {
+					lastBranch = branch;
+					prUrl = null;
+					prNumber = null;
+					fetchPr(branch);
+				}
+				tui.requestRender();
+			});
 
 			return {
 				dispose: unsub,
 				invalidate() {},
 				render(width: number): string[] {
+				  try {
 					// Gather token stats from session
 					let input = 0;
 					let output = 0;
@@ -103,8 +196,14 @@ export default function (pi: ExtensionAPI) {
 					// Model
 					const modelName = ctx.model?.name || ctx.model?.id || "no model";
 
-					// Git branch
+					// Git branch (also trigger PR lookup on first render)
 					const branch = footerData.getGitBranch();
+					if (branch && branch !== lastBranch) {
+						lastBranch = branch;
+						prUrl = null;
+						prNumber = null;
+						fetchPr(branch);
+					}
 
 					// Tokens and cost
 					const tokenStr = `↑${formatTokens(input)} ↓${formatTokens(output)}`;
@@ -120,23 +219,50 @@ export default function (pi: ExtensionAPI) {
 					const level = pi.getThinkingLevel();
 					const thinking = THINKING[level] || THINKING.off;
 
-					// Build segments
-					const segments: Array<{ text: string; fg: number; bg: number }> = [
+					// Session name and active tool count (right-side identity/config)
+					const sessionName = pi.getSessionName();
+					const activeTools = pi.getActiveTools().length;
+
+					// Turn delta cost (cost accrued since the current turn started)
+					const turnDelta = hasTurnBaseline ? Math.max(0, cost - turnBaselineCost) : 0;
+
+					// Left-aligned segments
+					const leftSegments: Segment[] = [
 						{ text: modelName, fg: COLORS.modelFg, bg: COLORS.modelBg },
 						{ text: thinking.label, fg: thinking.fg, bg: thinking.bg },
 					];
 
 					if (branch) {
-						segments.push({ text: `${BRANCH} ${branch}`, fg: COLORS.branchFg, bg: COLORS.branchBg });
+						leftSegments.push({ text: `${BRANCH} ${branch}`, fg: COLORS.branchFg, bg: COLORS.branchBg });
 					}
 
-					segments.push(
+					if (prUrl && prNumber) {
+						leftSegments.push({ text: `${PR_ICON} #${prNumber}`, fg: 117, bg: 24, link: prUrl });
+					}
+
+					// Right-aligned segments (ordered center-to-edge)
+					const rightSegments: Segment[] = [];
+
+					if (sessionName) {
+						rightSegments.push({ text: sessionName, fg: COLORS.sessionFg, bg: COLORS.sessionBg });
+					}
+
+					rightSegments.push({ text: `${TOOL_ICON} ${activeTools}`, fg: COLORS.toolsFg, bg: COLORS.toolsBg });
+
+					if (hasTurnBaseline) {
+						rightSegments.push({ text: `Δ$${turnDelta.toFixed(3)}`, fg: COLORS.turnFg, bg: COLORS.turnBg });
+					}
+
+					rightSegments.push(
 						{ text: tokenStr, fg: COLORS.tokensFg, bg: COLORS.tokensBg },
 						{ text: costStr, fg: COLORS.costFg, bg: COLORS.costBg },
 						{ text: ctxStr, fg: COLORS.ctxFg, bg: COLORS.ctxBg },
 					);
 
-					return [buildSegments(segments, width)];
+					return [buildPowerline(leftSegments, rightSegments, width)];
+				  } catch {
+					return [""];
+				  }
 				},
 			};
 		});
